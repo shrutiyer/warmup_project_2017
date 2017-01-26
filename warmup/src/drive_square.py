@@ -2,11 +2,13 @@
 
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Vector3
+from visualization_msgs.msg import Marker
 import tf
 import rospy
 import math
 from enum import Enum
 import copy
+from marker import MarkerMaker
 
 class States(Enum):
     CALC_FORWARD = 0
@@ -30,16 +32,26 @@ target_angle = 0
 pos_theta = 0.1 # TODO: Figure out units.
 angle_theta = 5 # Degrees
 
+is_callbacked = False
 def on_odom_received(odom):
-    curr_pos = odom.pose.pose.position
+    curr_pos.x = odom.pose.pose.position.x
+    curr_pos.y = odom.pose.pose.position.y
+    # print "update position: "
+    # print curr_pos.x, curr_pos.y
     curr_angle = tf.transformations.euler_from_quaternion((
         odom.pose.pose.orientation.x,
         odom.pose.pose.orientation.y,
         odom.pose.pose.orientation.z,
         odom.pose.pose.orientation.w))[2] * 180 / (math.pi)
 
+    global is_callbacked
+    is_callbacked = True
+    # print is_callbacked
+
 def is_in_position(curr_pos, target_pos, theta):
-    error = math.sqrt((target_pos.x - curr_pos.x)**2 - (target_pos.y - curr_pos.y)**2)
+    error = math.sqrt((target_pos.x - curr_pos.x)**2 + (target_pos.y - curr_pos.y)**2)
+    # print "error: "
+    # print error
     return error < theta
 
 def is_in_angle(curr_angle, target_angle, theta):
@@ -49,7 +61,10 @@ def is_in_angle(curr_angle, target_angle, theta):
 def get_target_pos(position, heading):
     # TODO: Fix.
     new_pos = copy.deepcopy(position)
-    new_pos.x += new_pos.x + 10
+    # print "yaw:"
+    # print heading
+    new_pos.x += 1 * math.cos(math.radians(heading))
+    new_pos.y += 1 * math.sin(math.radians(heading))
     return new_pos
 
 def get_target_angle(angle):
@@ -65,22 +80,34 @@ turn_twist = Twist()
 turn_twist.angular.z = 1
 stop_twist = Twist()
 
+marker_maker = MarkerMaker()
+
 r = rospy.Rate(10)
 while not rospy.is_shutdown():
 
+    if not is_callbacked:
+        r.sleep()
+        continue
+
     # State machine.
     if current_state == States.CALC_FORWARD:
-        print "calcuating forward"
         target_pos = get_target_pos(curr_pos, curr_angle)
-        current_state = States.MOVE_FORWARD
-        publisher.publish(forward_twist)
+
+        marker_maker.set_position(target_pos)
+        # print "publishing"
+        marker_maker.publish()
+
+        # current_state = States.STOP
+        # publisher.publish(forward_twist)
 
     elif current_state == States.MOVE_FORWARD:
-        print "in moving state"
-        print "current:"
-        print curr_pos.x
-        print "target: "
-        print target_pos.x
+
+
+
+        # print "current:"
+        # print curr_pos.x, curr_pos.y
+        # print "target: "
+        # print target_pos.x, target_pos.y
         # Check if we are in the destination.
         if is_in_position(curr_pos, target_pos, pos_theta):
             current_state = States.CALC_TURN
