@@ -29,8 +29,8 @@ curr_pos = Position()
 curr_angle = 0
 target_pos = Position()
 target_angle = 0
-pos_theta = 0.1 # TODO: Figure out units.
-angle_theta = 5 # Degrees
+pos_theta = 0.2 # TODO: Figure out units.
+angle_theta = 8 # Degrees
 
 is_callbacked = False
 def on_odom_received(odom):
@@ -38,6 +38,7 @@ def on_odom_received(odom):
     curr_pos.y = odom.pose.pose.position.y
     # print "update position: "
     # print curr_pos.x, curr_pos.y
+    global curr_angle
     curr_angle = tf.transformations.euler_from_quaternion((
         odom.pose.pose.orientation.x,
         odom.pose.pose.orientation.y,
@@ -61,8 +62,8 @@ def is_in_angle(curr_angle, target_angle, theta):
 def get_target_pos(position, heading):
     # TODO: Fix.
     new_pos = copy.deepcopy(position)
-    # print "yaw:"
-    # print heading
+    print "yaw:"
+    print heading
     new_pos.x += 1 * math.cos(math.radians(heading))
     new_pos.y += 1 * math.sin(math.radians(heading))
     return new_pos
@@ -77,12 +78,12 @@ listener = rospy.Subscriber('odom', Odometry, on_odom_received)
 forward_twist = Twist()
 forward_twist.linear.x = 1; forward_twist.linear.y = 0; forward_twist.linear.z = 0
 turn_twist = Twist()
-turn_twist.angular.z = 1
+turn_twist.angular.z = 0.2
 stop_twist = Twist()
 
 marker_maker = MarkerMaker()
 
-r = rospy.Rate(10)
+r = rospy.Rate(1000)
 while not rospy.is_shutdown():
 
     if not is_callbacked:
@@ -97,12 +98,10 @@ while not rospy.is_shutdown():
         # print "publishing"
         marker_maker.publish()
 
-        # current_state = States.STOP
-        # publisher.publish(forward_twist)
+        current_state = States.MOVE_FORWARD
+        publisher.publish(forward_twist)
 
     elif current_state == States.MOVE_FORWARD:
-
-
 
         # print "current:"
         # print curr_pos.x, curr_pos.y
