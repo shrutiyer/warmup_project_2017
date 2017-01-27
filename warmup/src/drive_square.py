@@ -72,6 +72,9 @@ class SquareDrivingController(object):
         self.target_angle = ((self.curr_angle + 180 + 90) % 360) - 180
 
     def run(self):
+        sides_count = 0
+        SIDES_MAX = 4
+
         r = rospy.Rate(1000)
         while not rospy.is_shutdown():
 
@@ -92,16 +95,20 @@ class SquareDrivingController(object):
                     self.twist_publisher.publish(self.twist_stop)
 
             elif self.current_state == States.CALC_TURN:
-                self.set_target_angle()
-                self.current_state = States.TURN
-                self.twist_publisher.publish(self.twist_left)
+                sides_count += 1
+                if sides_count < SIDES_MAX:
+                    self.set_target_angle()
+                    self.twist_publisher.publish(self.twist_left)
+                    self.current_state = States.TURN
+                else:
+                    self.current_state = States.STOP
 
             elif self.current_state == States.TURN:
                 if self.is_in_angle():
                     self.current_state = States.CALC_FORWARD
                     self.twist_publisher.publish(self.twist_stop)
 
-            elif current_state == States.STOP:
+            elif self.current_state == States.STOP:
                 self.twist_publisher.publish(self.twist_stop)
 
             r.sleep()
