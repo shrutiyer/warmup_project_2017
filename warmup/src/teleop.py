@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+""" This script is a ROS node that tele operate a robot """
+
 import rospy
 from geometry_msgs.msg import Twist
 import sys, select, termios, tty
@@ -29,10 +32,11 @@ def getKey():
 settings = termios.tcgetattr(sys.stdin)
 key = None
 
+# init the node and a publisher
 publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
 rospy.init_node('teleop')
 
-while key != '\x03':
+while key != '\x03': # looping utill 'ctrl-c'
     key = getKey()
 
     x = 0
