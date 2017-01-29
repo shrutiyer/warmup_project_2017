@@ -17,12 +17,12 @@ class WallFollowing(object):
         self.min_value_angle = 0    # Angle pointing at min distance
         self.curr_dist = 0
         self.k = 2                  # Proportionality constant
-        
+
         rospy.init_node('wall_follow')
         self.laser_listener = rospy.Subscriber('/scan', LaserScan, self.on_laser_received)
         self.twist_publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
         self.marker_publisher = rospy.Publisher('/wall_marker', Marker, queue_size=10)
-        
+
         self.twist_move = Twist()   # Twist object to make neato move in world
         self.twist_stop = Twist()
 
@@ -51,24 +51,23 @@ class WallFollowing(object):
         self.curr_marker.color.a = 1.0
 
     def on_laser_received(self, laser_array):
-        self.curr_dist = min([distance for distance in laser_array.ranges if distance != 0])    # Min non-zero distance
-        self.min_value_angle = math.radians(laser_array.ranges.index(self.curr_dist))           # Angle of that min distance
+        scans = [distance for distance in laser_array.ranges if distance != 0]
+        if len(scans) > 0:
+            self.curr_dist = min(scans)    # Min non-zero distance
+            self.min_value_angle = math.radians(laser_array.ranges.index(self.curr_dist)) # Angle of that min distance
 
     def run(self):
         r = rospy.Rate(5)
         while not rospy.is_shutdown():
-            print "Running"
             self.update_twist()
             self.twist_publisher.publish(self.twist_move)
             self.update_marker()
             self.marker_publisher.publish(self.curr_marker)
             r.sleep()
-        print "Done"
 
     def update_twist(self):
-        self.twist_move.angular.z = - 2*math.cos(self.min_value_angle % math.pi)
+        self.twist_move.angular.z = - self.k * math.cos(self.min_value_angle % math.pi)
         self.twist_move.linear.x = abs(math.sin(self.min_value_angle))
-        print "Angle: ", self.min_value_angle, " Linear: ", self.twist_move.linear.x, " Angular: ", self.twist_move.angular.z
 
     def update_marker(self):
         self.curr_marker.pose.position.x = self.curr_dist*math.cos(self.min_value_angle)
