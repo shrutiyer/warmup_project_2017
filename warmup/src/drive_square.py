@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 
+# IMPORTS ======================================================================
+
+import copy
+from enum import Enum
+import math
+import rospy
+import tf
+
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Vector3
-from visualization_msgs.msg import Marker
-import tf
-import rospy
-import math
-from enum import Enum
-import copy
-from marker import MarkerMaker
+
+from models.position import Position
+
+# CLASSES ======================================================================
 
 class States(Enum):
     CALC_FORWARD = 0
@@ -17,116 +22,99 @@ class States(Enum):
     TURN = 3
     STOP = 4
 
-class Position:
+class SquareDrivingController(object):
+
     def __init__(self):
-        self.x = 0
-        self.y = 0
+        self.current_state = States.CALC_FORWARD
+        self.curr_pos = Position(0, 0)
+        self.target_pos = Position(0, 0)
+        self.curr_angle = 0
+        self.target_angle = 0
+        self.theta_pos = 0.2
+        self.theta_angle = 8 # In degrees
 
-# Globals.
-# TODO: Refactor.
-current_state = States.CALC_FORWARD
-curr_pos = Position()
-curr_angle = 0
-target_pos = Position()
-target_angle = 0
-pos_theta = 0.2 # TODO: Figure out units.
-angle_theta = 8 # Degrees
+        rospy.init_node('drive_square')
 
-is_callbacked = False
-def on_odom_received(odom):
-    curr_pos.x = odom.pose.pose.position.x
-    curr_pos.y = odom.pose.pose.position.y
-    # print "update position: "
-    # print curr_pos.x, curr_pos.y
-    global curr_angle
-    curr_angle = tf.transformations.euler_from_quaternion((
-        odom.pose.pose.orientation.x,
-        odom.pose.pose.orientation.y,
-        odom.pose.pose.orientation.z,
-        odom.pose.pose.orientation.w))[2] * 180 / (math.pi)
+        self.odom_listener = rospy.Subscriber('odom', Odometry, self.on_odom_received)
+        self.twist_publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
+        self.has_read_data_once = False
 
-    global is_callbacked
-    is_callbacked = True
-    # print is_callbacked
+        self.twist_forward = Twist()
+        self.twist_forward.linear.x = 1; self.twist_forward.linear.y = 0; self.twist_forward.linear.z = 0
+        self.twist_left = Twist()
+        self.twist_left.angular.z = 0.2
+        self.twist_stop = Twist()
 
-def is_in_position(curr_pos, target_pos, theta):
-    error = math.sqrt((target_pos.x - curr_pos.x)**2 + (target_pos.y - curr_pos.y)**2)
-    # print "error: "
-    # print error
-    return error < theta
+    def on_odom_received(self, odom):
+        self.curr_pos.x = odom.pose.pose.position.x
+        self.curr_pos.y = odom.pose.pose.position.y
+        self.curr_angle = tf.transformations.euler_from_quaternion((
+            odom.pose.pose.orientation.x,
+            odom.pose.pose.orientation.y,
+            odom.pose.pose.orientation.z,
+            odom.pose.pose.orientation.w))[2] * 180 / (math.pi)
+        self.has_read_data_once = True
 
-def is_in_angle(curr_angle, target_angle, theta):
-    error = math.fabs(target_angle - curr_angle)
-    return error < theta
+    def is_in_position(self):
+        error = math.sqrt((self.target_pos.x - self.curr_pos.x)**2
+            + (self.target_pos.y - self.curr_pos.y)**2)
+        return error < self.theta_pos
 
-def get_target_pos(position, heading):
-    # TODO: Fix.
-    new_pos = copy.deepcopy(position)
-    print "yaw:"
-    print heading
-    new_pos.x += 1 * math.cos(math.radians(heading))
-    new_pos.y += 1 * math.sin(math.radians(heading))
-    return new_pos
+    def is_in_angle(self):
+        error = math.fabs(self.target_angle - self.curr_angle)
+        return error < self.theta_angle
 
-def get_target_angle(angle):
-    return ((angle + 180 + 90) % 360) - 180
+    def set_target_pos(self):
+        self.target_pos.x = self.curr_pos.x + 1 * math.cos(math.radians(self.curr_angle))
+        self.target_pos.y = self.curr_pos.y + 1 * math.sin(math.radians(self.curr_angle))
 
-publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
-rospy.init_node('drive_square')
-listener = rospy.Subscriber('odom', Odometry, on_odom_received)
+    def set_target_angle(self):
+        self.target_angle = ((self.curr_angle + 180 + 90) % 360) - 180
 
-forward_twist = Twist()
-forward_twist.linear.x = 1; forward_twist.linear.y = 0; forward_twist.linear.z = 0
-turn_twist = Twist()
-turn_twist.angular.z = 0.2
-stop_twist = Twist()
+    def run(self):
+        sides_count = 0
+        SIDES_MAX = 4
 
-marker_maker = MarkerMaker()
+        r = rospy.Rate(1000)
+        while not rospy.is_shutdown():
 
-r = rospy.Rate(1000)
-while not rospy.is_shutdown():
+            # Prevents the state machine from running when no data has yet been received.
+            if not self.has_read_data_once:
+                r.sleep()
+                continue
 
-    if not is_callbacked:
-        r.sleep()
-        continue
+            # State machine.
+            if self.current_state == States.CALC_FORWARD:
+                self.set_target_pos()
+                self.twist_publisher.publish(self.twist_forward)
+                self.current_state = States.MOVE_FORWARD
 
-    # State machine.
-    if current_state == States.CALC_FORWARD:
-        target_pos = get_target_pos(curr_pos, curr_angle)
+            elif self.current_state == States.MOVE_FORWARD:
+                if self.is_in_position():
+                    self.current_state = States.CALC_TURN
+                    self.twist_publisher.publish(self.twist_stop)
 
-        marker_maker.set_position(target_pos)
-        # print "publishing"
-        marker_maker.publish()
+            elif self.current_state == States.CALC_TURN:
+                sides_count += 1
+                if sides_count < SIDES_MAX:
+                    self.set_target_angle()
+                    self.twist_publisher.publish(self.twist_left)
+                    self.current_state = States.TURN
+                else:
+                    self.current_state = States.STOP
 
-        current_state = States.MOVE_FORWARD
-        publisher.publish(forward_twist)
+            elif self.current_state == States.TURN:
+                if self.is_in_angle():
+                    self.current_state = States.CALC_FORWARD
+                    self.twist_publisher.publish(self.twist_stop)
 
-    elif current_state == States.MOVE_FORWARD:
+            elif self.current_state == States.STOP:
+                self.twist_publisher.publish(self.twist_stop)
 
-        # print "current:"
-        # print curr_pos.x, curr_pos.y
-        # print "target: "
-        # print target_pos.x, target_pos.y
-        # Check if we are in the destination.
-        if is_in_position(curr_pos, target_pos, pos_theta):
-            current_state = States.CALC_TURN
-            publisher.publish(stop_twist)
+            r.sleep()
 
-    elif current_state == States.CALC_TURN:
-        target_angle = get_target_angle(curr_angle)
-        current_state = States.TURN
-        publisher.publish(turn_twist)
+# EXECUTE ======================================================================
 
-    elif current_state == States.TURN:
-        if is_in_angle(curr_angle, target_angle, angle_theta):
-            current_state = States.CALC_FORWARD
-            publisher.publish(stop_twist)
-
-    elif current_state == States.STOP:
-        publisher.publish(stop_twist)
-        print "Stopped."
-
-    else:
-        print "Done."
-
-    r.sleep()
+if __name__ == '__main__':
+    controller = SquareDrivingController()
+    controller.run()
