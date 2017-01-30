@@ -2,15 +2,23 @@
 
 # IMPORTS ======================================================================
 
+import math
+import rospy
+
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
+
 # CLASSES ======================================================================
 
 class PersonFollowing(object):
 
     def __init__(self):
-        pass
+        rospy.init_node('wall_follow')
 
     def run(self):
-        pass
+        r = rospy.Rate(5)
+        while not rospy.is_shutdown():
+            r.sleep()
 
     def on_laser_received(self, laser_array):
         pass
