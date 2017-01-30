@@ -66,6 +66,7 @@ class WallFollowing(object):
             r.sleep()
 
     def update_twist(self):
+        # TODO: Add documentation with graphs
         self.twist_move.angular.z = - self.k * math.cos(self.min_value_angle % math.pi)
         self.twist_move.linear.x = abs(math.sin(self.min_value_angle))
 
