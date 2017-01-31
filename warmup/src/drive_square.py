@@ -86,10 +86,10 @@ class SquareDrivingController(object):
             # State machine.
             if self.current_state == States.CALC_FORWARD:
                 self.set_target_pos()
-                self.twist_publisher.publish(self.twist_forward)
                 self.current_state = States.MOVE_FORWARD
 
             elif self.current_state == States.MOVE_FORWARD:
+                self.twist_publisher.publish(self.twist_forward)
                 if self.is_in_position():
                     self.current_state = States.CALC_TURN
                     self.twist_publisher.publish(self.twist_stop)
