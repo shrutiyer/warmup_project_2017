@@ -14,15 +14,31 @@ class PersonFollowing(object):
 
     def __init__(self):
         self.front_angle_range = 90
-        self.distance_range = (0.3, 1.3)
-        self.point_to_follow = (0, 0) # Tuple of distance, angle.
+        self.distance_range = (0.4, 2)  # Tuple of (min, max)
+        self.point_to_follow = (0, 0)   # Tuple of (distance, angle)
+        self.person_distance = 0.5      # distance want to keep away from the person
+        # Proportionality constant
+        self.theta = 2
+        self.k = 2
+
         rospy.init_node('person_follow')
         self.laser_listener = rospy.Subscriber('/stable_scan', LaserScan, self.on_laser_received)
+
+        self.twist = Twist()
 
     def run(self):
         r = rospy.Rate(5)
         while not rospy.is_shutdown():
+            self.update_twist()
+            self.twist_publisher.publish(self.twist)
             r.sleep()
+
+    def update_twist(self):
+        self.twist.angular.z = - self.point_to_follow[1] * self.theta
+        self.twist.linear.x = (self.point_to_follow[0] - self.person_distance) * self.k
+
+    def update_marker(self):
+        pass
 
     def on_laser_received(self, laser_array):
         self.point_to_follow = self.get_point_to_follow(
