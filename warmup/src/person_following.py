@@ -25,9 +25,12 @@ class PersonFollowing(object):
             r.sleep()
 
     def on_laser_received(self, laser_array):
-        # self.point_to_follow = self.get_point_to_follow(
-        #     self.get_ranged_scans(
-        #         self.get_front_angle_scans(self.front_angle_range, laser_array.ranges))))
+        self.point_to_follow = self.get_point_to_follow(
+            self.angle_correct(
+                self.get_ranged_scans(
+                    self.distance_range, self.get_front_angle_scans(self.front_angle_range, laser_array.ranges))))
+
+        print self.point_to_follow
 
     def get_front_angle_scans(self, front_angle_range, scans):
         """
@@ -38,17 +41,32 @@ class PersonFollowing(object):
         return [(distance, angle) for angle, distance in enumerate(scans)
             if (angle <= front_angle_range/2) or (angle > 361 - front_angle_range/2)]
 
-    def get_ranged_scans(self, distance_range, front_angle_range):
+    def get_ranged_scans(self, distance_range, angle_filtered_scan):
         """
         distance_range - a tuple of (min range, max range) in meters
-        front_angle_range - (distance, angle) of points in that are within the angle range
+        angle_filtered_scan - (distance, angle) of points in that are within the angle range
         return (distance, angle) of points in that are within the distance range (in meters)
         """
-        return [(distance, angle) for distance, angle in front_angle_range
+        return [(distance, angle) for distance, angle in angle_filtered_scan
             if (distance >= distance_range[0]) and (distance <= distance_range[1])]
 
-    def get_point_to_follow(self):
-        pass
+    def angle_correct(self, range_angle_filtered_scan):
+        """
+        return an array with corrected angles
+        """
+        for i in range(len(range_angle_filtered_scan)):
+            if range_angle_filtered_scan[i][1] > 180:
+                range_angle_filtered_scan[i] = (range_angle_filtered_scan[i][0], range_angle_filtered_scan[i][1]-360)
+
+        return range_angle_filtered_scan
+
+    def get_point_to_follow(self, angle_corrected_scan):
+        """
+        angle_corrected_scan - (distance, angle) of points in that are within the angle and distance range
+        return center of mass of (distance, angle) 
+        """
+        return (sum([distance for distance, angle in angle_corrected_scan])/float(len(angle_corrected_scan)+1), 
+            sum([angle for distance, angle in angle_corrected_scan])/float(len(angle_corrected_scan)+1))
 
 # EXECUTE ======================================================================
 
