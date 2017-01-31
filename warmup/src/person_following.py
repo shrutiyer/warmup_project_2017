@@ -52,7 +52,10 @@ class PersonFollowing(object):
 
     def angle_correct(self, range_angle_filtered_scan):
         """
-        return an array with corrected angles
+        Convert points with angle larger than 180 to the negative range angles
+
+        range_angle_filtered_scan - (distance, angle) of points in that are within the angle and distance range
+        return an array of (distance, angle) points with corrected angles
         """
         for i in range(len(range_angle_filtered_scan)):
             if range_angle_filtered_scan[i][1] > 180:
@@ -60,13 +63,17 @@ class PersonFollowing(object):
 
         return range_angle_filtered_scan
 
-    def get_point_to_follow(self, angle_corrected_scan):
+    def get_point_to_follow(self, angle_corrected_scan, bias=0.1):
         """
-        angle_corrected_scan - (distance, angle) of points in that are within the angle and distance range
+        angle_corrected_scan - (distance, angle) of points with corrected angles
         return center of mass of (distance, angle) 
         """
-        return (sum([distance for distance, angle in angle_corrected_scan])/float(len(angle_corrected_scan)+1), 
-            sum([angle for distance, angle in angle_corrected_scan])/float(len(angle_corrected_scan)+1))
+
+        # divide by total number of points with a bias term in case of 0
+        div = len(angle_corrected_scan) + bias
+
+        return (sum([distance for distance, angle in angle_corrected_scan]) / div, 
+            sum([angle for distance, angle in angle_corrected_scan]) / div)
 
 # EXECUTE ======================================================================
 
