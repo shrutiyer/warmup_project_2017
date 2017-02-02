@@ -7,6 +7,7 @@ import rospy
 
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
+from visualization_msgs.msg import Marker
 
 # CLASSES ======================================================================
 
@@ -14,39 +15,75 @@ class PersonFollowing(object):
 
     def __init__(self):
         self.front_angle_range = 90
-        self.distance_range = (0.4, 2)  # Tuple of (min, max)
+        self.distance_range = (0.3, 1)  # Tuple of (min, max)
         self.point_to_follow = (0, 0)   # Tuple of (distance, angle)
         self.person_distance = 0.5      # distance want to keep away from the person
         # Proportionality constant
-        self.theta = 2
-        self.k = 2
+        self.theta = 0.02
+        self.k = 0.6
 
         rospy.init_node('person_follow')
         self.laser_listener = rospy.Subscriber('/stable_scan', LaserScan, self.on_laser_received)
+        self.twist_publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
+        self.marker_publisher = rospy.Publisher('/wall_marker', Marker, queue_size=10)
 
+        # Twist setup
         self.twist = Twist()
+        self.twist.angular.z = 0 
+        self.twist.linear.x = 0
+
+        # Marker setup
+        self.curr_marker = Marker()
+        self.curr_marker.type = Marker.SPHERE
+
+        # Header setup
+        self.curr_marker.header.frame_id = "base_link"
+        self.curr_marker.header.stamp = rospy.Time.now()
+
+        # set x y z scales
+        self.curr_marker.scale.x = 0.4
+        self.curr_marker.scale.y = 0.4
+        self.curr_marker.scale.z = 0.4
+
+        # rgb and alpha values
+        self.curr_marker.color.r = 1.0
+        self.curr_marker.color.g = 1.0
+        self.curr_marker.color.b = 0.0
+        self.curr_marker.color.a = 1.0
 
     def run(self):
-        r = rospy.Rate(5)
+        r = rospy.Rate(10)
         while not rospy.is_shutdown():
             self.update_twist()
             self.twist_publisher.publish(self.twist)
+            self.update_marker()
+            self.marker_publisher.publish(self.curr_marker)
             r.sleep()
 
     def update_twist(self):
-        self.twist.angular.z = - self.point_to_follow[1] * self.theta
-        self.twist.linear.x = (self.point_to_follow[0] - self.person_distance) * self.k
+        if self.point_to_follow[0] != 0:
+            self.twist.angular.z = self.point_to_follow[1] * self.theta
+            self.twist.linear.x = (self.point_to_follow[0] - self.person_distance) * self.k
+        else:
+            self.twist.angular.z = 0 
+            self.twist.linear.x = 0
 
     def update_marker(self):
-        pass
+
+        self.curr_marker.pose.position.x = self.point_to_follow[0]*math.cos(math.radians(self.point_to_follow[1]))
+        self.curr_marker.pose.position.y = self.point_to_follow[0]*math.sin(math.radians(self.point_to_follow[1]))
+
+        if (self.point_to_follow[0] == 0) & (self.point_to_follow[1] == 0):
+            self.curr_marker.color.a = 0.0
+        else:
+            self.curr_marker.color.a = 1.0
+            print self.curr_marker.pose.position.x, self.curr_marker.pose.position.y
 
     def on_laser_received(self, laser_array):
         self.point_to_follow = self.get_point_to_follow(
             self.angle_correct(
                 self.get_ranged_scans(
                     self.distance_range, self.get_front_angle_scans(self.front_angle_range, laser_array.ranges))))
-
-        print self.point_to_follow
 
     def get_front_angle_scans(self, front_angle_range, scans):
         """
