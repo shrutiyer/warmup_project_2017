@@ -33,8 +33,6 @@ class SquareDrivingController(object):
         self.theta_pos = 0.2
         self.theta_angle = 8 # In degrees
 
-        rospy.init_node('drive_square')
-
         self.odom_listener = rospy.Subscriber('odom', Odometry, self.on_odom_received)
         self.twist_publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
         self.has_read_data_once = False
@@ -74,9 +72,10 @@ class SquareDrivingController(object):
     def run(self):
         sides_count = 0
         SIDES_MAX = 4
+        is_complete = False
 
         r = rospy.Rate(1000)
-        while not rospy.is_shutdown():
+        while not (rospy.is_shutdown() or is_complete):
 
             # Prevents the state machine from running when no data has yet been received.
             if not self.has_read_data_once:
@@ -110,11 +109,13 @@ class SquareDrivingController(object):
 
             elif self.current_state == States.STOP:
                 self.twist_publisher.publish(self.twist_stop)
+                is_complete = True
 
             r.sleep()
 
 # EXECUTE ======================================================================
 
 if __name__ == '__main__':
+    rospy.init_node('drive_square')
     controller = SquareDrivingController()
     controller.run()
