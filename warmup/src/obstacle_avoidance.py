@@ -4,6 +4,7 @@
 
 import math
 import rospy
+import tf
 
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -14,6 +15,7 @@ from sensor_msgs.msg import LaserScan
 class ObstacleAvoiding(object):
 
     def __init__(self):
+        # Scan the front of the robot for obstacles
         self.front_angle_range = 90
         self.distance_range = (0.4, 3)  # Tuple of (min, max)
         self.odom_received = False
@@ -48,8 +50,9 @@ class ObstacleAvoiding(object):
     def attractive_forces(self):
         goal_distance = math.sqrt(
             (self.goal_odom[0] - self.curr_pos_odom[0])**2 +
-            (self.goal_odom[0] - self.curr_pos_odom[0])**2)
+            (self.goal_odom[1] - self.curr_pos_odom[1])**2)
 
+        print("Goal Distance: ", goal_distance)
         self.goal_bl = self.odom_to_base_link(self.goal_odom)
         goal_angle = math.atan2(self.goal_bl[1], float(self.goal_bl[0]))
         angular = goal_angle / (2*math.pi)
@@ -63,6 +66,7 @@ class ObstacleAvoiding(object):
 
     def odom_to_base_link(self, odom_point):
         # Receives a tuple of odom
+        # TODO: take into consideration robot's odom co-ordinates
         return (
             odom_point[0] * math.cos(self.curr_angle) + odom_point[1] * math.sin(self.curr_angle),
             -1 * odom_point[0] * math.sin(self.curr_angle) + odom_point[1] * math.cos(self.curr_angle))
@@ -71,17 +75,18 @@ class ObstacleAvoiding(object):
         pass
 
     def on_odom_received(self, odom):
-        curr_pos_odom = (odom.pose.pose.position.x[0],odom.pose.pose.position.y[1])
+        self.curr_pos_odom = (odom.pose.pose.position.x,odom.pose.pose.position.y)
         if not self.odom_received:
             # Set the goal distance in odom
-            self.goal = (odom.pose.pose.position.x[0]+self.goal_input[0],
-                odom.pose.pose.position.y[1]+self.goal_input[1])
-            self.curr_angle = tf.transformations.euler_from_quaternion((
-                odom.pose.pose.orientation.x,
-                odom.pose.pose.orientation.y,
-                odom.pose.pose.orientation.z,
-                odom.pose.pose.orientation.w))[2]
+            self.goal_odom = (odom.pose.pose.position.x+self.goal_odom[0],
+                odom.pose.pose.position.y+self.goal_odom[1])
             self.odom_received = True
+        # Update current heading 
+        self.curr_angle = tf.transformations.euler_from_quaternion((
+            odom.pose.pose.orientation.x,
+            odom.pose.pose.orientation.y,
+            odom.pose.pose.orientation.z,
+            odom.pose.pose.orientation.w))[2]
 
     def on_laser_received(self, laser_array):
         pass
