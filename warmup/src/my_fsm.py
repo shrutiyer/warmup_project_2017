@@ -5,19 +5,20 @@ import smach
 import smach_ros
 
 from drive_square import SquareDrivingController
+from person_following import PersonFollowing
 
-class StateGetToGoal(smach.State):
+class StatePersonFollowing(smach.State):
 
     class Outcomes:
-        goal_achieved = 'goal_achieved'
+        person_bumped = 'person_bumped'
 
     def __init__(self):
-        smach.State.__init__(self, outcomes = [self.Outcomes.goal_achieved])
+        self.controller = PersonFollowing()
+        smach.State.__init__(self, outcomes = [self.Outcomes.person_bumped])
 
     def execute(self, userdata):
-        goal_achieved = True
-        if goal_achieved: # TODO: Define this logic.
-            return self.Outcomes.goal_achieved
+        self.controller.run() # This will run in a loop till complete.
+        return self.Outcomes.person_bumped
 
 class StateDriveSquare(smach.State):
 
@@ -29,10 +30,9 @@ class StateDriveSquare(smach.State):
         smach.State.__init__(self, outcomes = [self.Outcomes.square_made])
 
     def execute(self, userdata):
-        self.controller.run() # TODO: The while loop internally needs to exit when square is complete.
-        square_made = True
-        if square_made: # TODO: Define this logic
-            return self.Outcomes.square_made
+        self.controller.run() # This will run in a loop till complete.
+        self.controller.reset()
+        return self.Outcomes.square_made
 
 def main():
     rospy.init_node('my_fsm')
@@ -41,11 +41,11 @@ def main():
     sm = smach.StateMachine(outcomes =  ['finished'])
 
     with sm:
-        smach.StateMachine.add('GET_TO_GOAL', StateGetToGoal(), transitions = {
-            StateGetToGoal.Outcomes.goal_achieved: 'DRIVE_SQUARE'
+        smach.StateMachine.add('PERSON_FOLLOWING', StatePersonFollowing(), transitions = {
+            StatePersonFollowing.Outcomes.person_bumped: 'DRIVE_SQUARE'
         })
         smach.StateMachine.add('DRIVE_SQUARE', StateDriveSquare(), transitions = {
-            StateDriveSquare.Outcomes.square_made: 'finished'
+            StateDriveSquare.Outcomes.square_made: 'PERSON_FOLLOWING'
         })
 
     # Execute SMACH plan

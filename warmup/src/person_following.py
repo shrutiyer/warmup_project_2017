@@ -24,7 +24,7 @@ class PersonFollowing(object):
         self.theta = 0.02
         self.k = 0.6
 
-        self.is_bumped = False
+        self.reset()
 
         self.laser_listener = rospy.Subscriber('/stable_scan', LaserScan, self.on_laser_received)
         self.bump_listener = rospy.Subscriber('/bump', Bump, self.on_bump_received)
@@ -55,7 +55,11 @@ class PersonFollowing(object):
         self.curr_marker.color.b = 0.0
         self.curr_marker.color.a = 1.0
 
+    def reset(self):
+        self.is_bumped = False
+
     def run(self):
+        self.reset()
         r = rospy.Rate(10)
         while not (rospy.is_shutdown() or self.is_bumped):
             self.update_twist()
@@ -92,11 +96,8 @@ class PersonFollowing(object):
                         laser_array.ranges))))
 
     def on_bump_received(self, bump_input):
-        self.is_bumped = (
-            bump_input.leftFront or
-            bump_input.leftSide or
-            bump_input.rightFront or
-            bump_input.rightSide)
+        if (bump_input.leftFront or bump_input.leftSide or bump_input.rightFront or bump_input.rightSide):
+            self.is_bumped = True
 
     def get_front_angle_scans(self, front_angle_range, scans):
         """
