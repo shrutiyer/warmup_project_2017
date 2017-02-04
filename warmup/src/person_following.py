@@ -9,6 +9,8 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker
 
+from neato_node.msg import Bump
+
 # CLASSES ======================================================================
 
 class PersonFollowing(object):
@@ -22,14 +24,16 @@ class PersonFollowing(object):
         self.theta = 0.02
         self.k = 0.6
 
-        rospy.init_node('person_follow')
+        self.reset()
+
         self.laser_listener = rospy.Subscriber('/stable_scan', LaserScan, self.on_laser_received)
+        self.bump_listener = rospy.Subscriber('/bump', Bump, self.on_bump_received)
         self.twist_publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
         self.marker_publisher = rospy.Publisher('/wall_marker', Marker, queue_size=10)
 
         # Twist setup
         self.twist = Twist()
-        self.twist.angular.z = 0 
+        self.twist.angular.z = 0
         self.twist.linear.x = 0
 
         # Marker setup
@@ -51,39 +55,49 @@ class PersonFollowing(object):
         self.curr_marker.color.b = 0.0
         self.curr_marker.color.a = 1.0
 
+    def reset(self):
+        self.is_bumped = False
+
     def run(self):
+        self.reset()
         r = rospy.Rate(10)
-        while not rospy.is_shutdown():
+        while not (rospy.is_shutdown() or self.is_bumped):
             self.update_twist()
             self.twist_publisher.publish(self.twist)
             self.update_marker()
             self.marker_publisher.publish(self.curr_marker)
             r.sleep()
+        self.twist_publisher.publish(Twist())
 
     def update_twist(self):
         if self.point_to_follow[0] != 0:
             self.twist.angular.z = self.point_to_follow[1] * self.theta
             self.twist.linear.x = (self.point_to_follow[0] - self.person_distance) * self.k
         else:
-            self.twist.angular.z = 0 
+            self.twist.angular.z = 0
             self.twist.linear.x = 0
 
     def update_marker(self):
-
-        self.curr_marker.pose.position.x = self.point_to_follow[0]*math.cos(math.radians(self.point_to_follow[1]))
-        self.curr_marker.pose.position.y = self.point_to_follow[0]*math.sin(math.radians(self.point_to_follow[1]))
+        self.curr_marker.pose.position.x = self.point_to_follow[0] * math.cos(math.radians(self.point_to_follow[1]))
+        self.curr_marker.pose.position.y = self.point_to_follow[0] * math.sin(math.radians(self.point_to_follow[1]))
 
         if (self.point_to_follow[0] == 0) & (self.point_to_follow[1] == 0):
             self.curr_marker.color.a = 0.0
         else:
             self.curr_marker.color.a = 1.0
-            print self.curr_marker.pose.position.x, self.curr_marker.pose.position.y
 
     def on_laser_received(self, laser_array):
         self.point_to_follow = self.get_point_to_follow(
             self.angle_correct(
                 self.get_ranged_scans(
-                    self.distance_range, self.get_front_angle_scans(self.front_angle_range, laser_array.ranges))))
+                    self.distance_range,
+                    self.get_front_angle_scans(
+                        self.front_angle_range,
+                        laser_array.ranges))))
+
+    def on_bump_received(self, bump_input):
+        if (bump_input.leftFront or bump_input.leftSide or bump_input.rightFront or bump_input.rightSide):
+            self.is_bumped = True
 
     def get_front_angle_scans(self, front_angle_range, scans):
         """
@@ -119,17 +133,19 @@ class PersonFollowing(object):
     def get_point_to_follow(self, angle_corrected_scan, bias=0.1):
         """
         angle_corrected_scan - (distance, angle) of points with corrected angles
-        return center of mass of (distance, angle) 
+        return center of mass of (distance, angle)
         """
 
         # divide by total number of points with a bias term in case of 0
         div = len(angle_corrected_scan) + bias
 
-        return (sum([distance for distance, angle in angle_corrected_scan]) / div, 
+        return (
+            sum([distance for distance, angle in angle_corrected_scan]) / div,
             sum([angle for distance, angle in angle_corrected_scan]) / div)
 
 # EXECUTE ======================================================================
 
 if __name__ == '__main__':
+    rospy.init_node('person_following')
     node = PersonFollowing()
     node.run()

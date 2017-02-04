@@ -25,15 +25,12 @@ class States(Enum):
 class SquareDrivingController(object):
 
     def __init__(self):
-        self.current_state = States.CALC_FORWARD
         self.curr_pos = Position(0, 0)
         self.target_pos = Position(0, 0)
+        self.theta_pos = 0.2
         self.curr_angle = 0
         self.target_angle = 0
-        self.theta_pos = 0.2
         self.theta_angle = 8 # In degrees
-
-        rospy.init_node('drive_square')
 
         self.odom_listener = rospy.Subscriber('odom', Odometry, self.on_odom_received)
         self.twist_publisher = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
@@ -44,6 +41,12 @@ class SquareDrivingController(object):
         self.twist_left = Twist()
         self.twist_left.angular.z = 0.2
         self.twist_stop = Twist()
+
+        self.reset()
+
+    def reset(self):
+        self.current_state = States.CALC_FORWARD
+        self.is_complete = False
 
     def on_odom_received(self, odom):
         self.curr_pos.x = odom.pose.pose.position.x
@@ -72,11 +75,13 @@ class SquareDrivingController(object):
         self.target_angle = ((self.curr_angle + 180 + 90) % 360) - 180
 
     def run(self):
+        self.reset()
+
         sides_count = 0
         SIDES_MAX = 4
 
         r = rospy.Rate(1000)
-        while not rospy.is_shutdown():
+        while not (rospy.is_shutdown() or self.is_complete):
 
             # Prevents the state machine from running when no data has yet been received.
             if not self.has_read_data_once:
@@ -102,6 +107,7 @@ class SquareDrivingController(object):
                     self.current_state = States.TURN
                 else:
                     self.current_state = States.STOP
+                    self.is_complete = True
 
             elif self.current_state == States.TURN:
                 if self.is_in_angle():
@@ -116,5 +122,6 @@ class SquareDrivingController(object):
 # EXECUTE ======================================================================
 
 if __name__ == '__main__':
+    rospy.init_node('drive_square')
     controller = SquareDrivingController()
     controller.run()
