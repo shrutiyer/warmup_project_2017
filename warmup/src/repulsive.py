@@ -18,11 +18,12 @@ class ObstacleAvoiding(object):
 
     def __init__(self):
         # Scan the front of the robot for obstacles
-        self.obstacle_range = 0.7
+        self.obstacle_range = 0.6
+        self.obstacle_angle = 60
         self.repulsive_forces = []
 
-        self.theta = 0.03
-        self.k = 0.2
+        self.theta = 0.007
+        self.k = 0.1
 
         self.odom_received = False
         self.goal_odom = (3, 0)         # Goal's (x,y) in odom
@@ -53,14 +54,14 @@ class ObstacleAvoiding(object):
         """
         x_rep, y_rep = self.get_force_field(self.repulsive_forces)
         x_att, y_att = self.odom_to_base_link(self.goal_odom)
-        x_sum, y_sum = (5 * x_rep + x_att, 5 * y_rep + y_att)
+        x_sum, y_sum = (3 * x_rep + x_att, 3 * y_rep + y_att)
 
         print x_rep, y_rep, x_att, y_att 
 
         mag, angle = vector_to_force((x_sum, y_sum))
 
         self.twist.angular.z = angle * self.theta
-        self.twist.linear.x = mag * self.k
+        self.twist.linear.x = mag * self.k * (170-abs(angle))/180
 
     def on_laser_received(self, laser_array):
         self.repulsive_forces = self.get_obstacle_in_range(laser_array.ranges)
