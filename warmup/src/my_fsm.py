@@ -17,6 +17,7 @@ class StatePersonFollowing(smach.State):
         smach.State.__init__(self, outcomes = [self.Outcomes.person_bumped])
 
     def execute(self, userdata):
+        print "In person following state"
         self.controller.run() # This will run in a loop till complete.
         return self.Outcomes.person_bumped
 
@@ -30,6 +31,7 @@ class StateDriveSquare(smach.State):
         smach.State.__init__(self, outcomes = [self.Outcomes.square_made])
 
     def execute(self, userdata):
+        print "In square driving state"
         self.controller.run() # This will run in a loop till complete.
         self.controller.reset()
         return self.Outcomes.square_made
